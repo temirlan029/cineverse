@@ -110,7 +110,6 @@ if (process.env.VK_APP_ID) {
   });
 
   app.get("/auth/vk/callback", async function (req, res) {
-    console.log("[VK] callback query:", JSON.stringify(req.query));
     var code = req.query.code;
     var state = req.query.state;
     var deviceId = req.query.device_id || req.session.vk_device_id;
@@ -131,17 +130,14 @@ if (process.env.VK_APP_ID) {
         device_id: deviceId,
         state: state,
       };
-      console.log("[VK] token request body:", JSON.stringify(tokenBody));
       var tokenRes = await fetch("https://id.vk.com/oauth2/auth", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams(tokenBody).toString(),
       });
       var tokenData = await tokenRes.json();
-      console.log("[VK] token response:", JSON.stringify(tokenData));
-
       if (!tokenData.access_token) {
-        console.log("[VK] no access_token in response");
+        console.log("[VK] token error:", tokenData.error, tokenData.error_description);
         return res.redirect("/?auth=error");
       }
 
@@ -155,7 +151,6 @@ if (process.env.VK_APP_ID) {
         }).toString(),
       });
       var userData = await userRes.json();
-      console.log("[VK] user_info response:", JSON.stringify(userData));
 
       var user = userData.user || userData;
       req.login(
