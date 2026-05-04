@@ -87,8 +87,6 @@ if (process.env.VK_APP_ID && process.env.VK_APP_SECRET) {
         clientID: process.env.VK_APP_ID,
         clientSecret: process.env.VK_APP_SECRET,
         callbackURL: BASE_URL + "/auth/vk/callback",
-        scope: ["email"],
-        profileFields: ["email"],
       },
       function (_accessToken, _refreshToken, _params, profile, done) {
         done(null, {
