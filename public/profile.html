@@ -163,8 +163,11 @@
 
         try {
           var sr = await fetch("/api/profile/stats");
-          profileStats = await sr.json();
-        } catch (e) {}
+          if (sr.ok) {
+            var data = await sr.json();
+            profileStats = { favorites: data.favorites || 0, comments: data.comments || 0, history: data.history || 0 };
+          }
+        } catch (e) { profileStats = { favorites: 0, comments: 0, history: 0 }; }
 
         var providerLabel = profileUser.provider === "google" ? "Google" : "VK";
         var avatarHtml = profileUser.avatar
