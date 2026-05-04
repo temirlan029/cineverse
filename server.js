@@ -1,26 +1,12 @@
 require("dotenv").config();
 const express = require("express");
-const session = require("express-session");
+const cookieSession = require("cookie-session");
 const passport = require("passport");
 const crypto = require("crypto");
 const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-/* ===== Session ===== */
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "cineverse-dev-secret",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: process.env.NODE_ENV === "production" && process.env.RAILWAY_PUBLIC_DOMAIN ? true : false,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      sameSite: "lax",
-    },
-  })
-);
 
 /* ===== Trust proxy (Railway) ===== */
 if (process.env.RAILWAY_PUBLIC_DOMAIN) {
@@ -31,6 +17,28 @@ if (process.env.RAILWAY_PUBLIC_DOMAIN) {
 var BASE_URL = process.env.SITE_URL
   || (process.env.RAILWAY_PUBLIC_DOMAIN ? "https://" + process.env.RAILWAY_PUBLIC_DOMAIN : "")
   || "http://localhost:" + PORT;
+
+/* ===== Cookie Session (data stored in cookie, survives server restarts) ===== */
+app.use(
+  cookieSession({
+    name: "cineverse_session",
+    keys: [process.env.SESSION_SECRET || "cineverse-dev-secret"],
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    secure: !!process.env.RAILWAY_PUBLIC_DOMAIN,
+    sameSite: "lax",
+  })
+);
+
+/* Passport 0.6+ compatibility with cookie-session */
+app.use(function (req, res, next) {
+  if (req.session && !req.session.regenerate) {
+    req.session.regenerate = function (cb) { cb(); };
+  }
+  if (req.session && !req.session.save) {
+    req.session.save = function (cb) { cb(); };
+  }
+  next();
+});
 
 /* ===== Passport ===== */
 app.use(passport.initialize());
