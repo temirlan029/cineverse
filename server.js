@@ -90,8 +90,10 @@ if (process.env.VK_APP_ID) {
   app.get("/auth/vk", function (req, res) {
     var pkce = generatePKCE();
     var state = crypto.randomBytes(16).toString("hex");
+    var deviceId = crypto.randomUUID();
     req.session.vk_code_verifier = pkce.verifier;
     req.session.vk_state = state;
+    req.session.vk_device_id = deviceId;
 
     var params = new URLSearchParams({
       response_type: "code",
@@ -101,6 +103,7 @@ if (process.env.VK_APP_ID) {
       scope: "vkid.personal_info email",
       code_challenge: pkce.challenge,
       code_challenge_method: "s256",
+      device_id: deviceId,
     });
 
     res.redirect("https://id.vk.com/authorize?" + params.toString());
@@ -126,7 +129,8 @@ if (process.env.VK_APP_ID) {
           client_id: process.env.VK_APP_ID,
           redirect_uri: BASE_URL + "/auth/vk/callback",
           code_verifier: req.session.vk_code_verifier,
-          device_id: req.session.vk_state,
+          device_id: req.session.vk_device_id,
+          state: req.session.vk_state,
         }).toString(),
       });
       var tokenData = await tokenRes.json();
