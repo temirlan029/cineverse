@@ -4,6 +4,7 @@ const cookieSession = require("cookie-session");
 const passport = require("passport");
 const crypto = require("crypto");
 const path = require("path");
+const mongoose = require("mongoose");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -187,6 +188,178 @@ if (process.env.VK_APP_ID) {
 } else {
   console.log("[Auth] VK ID OAuth disabled (set VK_APP_ID)");
 }
+
+/* ===== JSON body parser ===== */
+app.use(express.json());
+
+/* ===== MongoDB ===== */
+if (process.env.MONGODB_URI) {
+  mongoose.connect(process.env.MONGODB_URI).then(function () {
+    console.log("[DB] MongoDB connected");
+  }).catch(function (err) {
+    console.log("[DB] MongoDB error:", err.message);
+  });
+} else {
+  console.log("[DB] MongoDB disabled (set MONGODB_URI)");
+}
+
+var favoriteSchema = new mongoose.Schema({
+  userId: String,
+  provider: String,
+  filmId: Number,
+  nameRu: String,
+  nameEn: String,
+  posterUrl: String,
+  year: String,
+  rating: String,
+  addedAt: { type: Date, default: Date.now },
+});
+favoriteSchema.index({ userId: 1, provider: 1, filmId: 1 }, { unique: true });
+var Favorite = mongoose.model("Favorite", favoriteSchema);
+
+var commentSchema = new mongoose.Schema({
+  userId: String,
+  userName: String,
+  userAvatar: String,
+  provider: String,
+  filmId: Number,
+  text: String,
+  createdAt: { type: Date, default: Date.now },
+});
+var Comment = mongoose.model("Comment", commentSchema);
+
+var historySchema = new mongoose.Schema({
+  userId: String,
+  provider: String,
+  filmId: Number,
+  nameRu: String,
+  nameEn: String,
+  posterUrl: String,
+  year: String,
+  rating: String,
+  viewedAt: { type: Date, default: Date.now },
+});
+historySchema.index({ userId: 1, provider: 1, filmId: 1 });
+var History = mongoose.model("History", historySchema);
+
+function requireAuth(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: "Not authenticated" });
+  next();
+}
+
+function userKey(req) {
+  return { userId: String(req.user.id), provider: req.user.provider };
+}
+
+/* ===== Favorites API ===== */
+app.get("/api/favorites", requireAuth, async function (req, res) {
+  try {
+    var favs = await Favorite.find(userKey(req)).sort({ addedAt: -1 });
+    res.json(favs);
+  } catch (e) { res.status(500).json({ error: "DB error" }); }
+});
+
+app.post("/api/favorites", requireAuth, async function (req, res) {
+  try {
+    var key = userKey(req);
+    var existing = await Favorite.findOne({ userId: key.userId, provider: key.provider, filmId: req.body.filmId });
+    if (existing) {
+      await Favorite.deleteOne({ _id: existing._id });
+      return res.json({ action: "removed" });
+    }
+    await Favorite.create({
+      userId: key.userId,
+      provider: key.provider,
+      filmId: req.body.filmId,
+      nameRu: req.body.nameRu,
+      nameEn: req.body.nameEn,
+      posterUrl: req.body.posterUrl,
+      year: req.body.year,
+      rating: req.body.rating,
+    });
+    res.json({ action: "added" });
+  } catch (e) { res.status(500).json({ error: "DB error" }); }
+});
+
+app.get("/api/favorites/check/:filmId", requireAuth, async function (req, res) {
+  try {
+    var key = userKey(req);
+    var exists = await Favorite.findOne({ userId: key.userId, provider: key.provider, filmId: Number(req.params.filmId) });
+    res.json({ isFav: !!exists });
+  } catch (e) { res.status(500).json({ error: "DB error" }); }
+});
+
+/* ===== Comments API ===== */
+app.get("/api/comments/:filmId", async function (req, res) {
+  try {
+    var comments = await Comment.find({ filmId: Number(req.params.filmId) }).sort({ createdAt: -1 }).limit(50);
+    res.json(comments);
+  } catch (e) { res.status(500).json({ error: "DB error" }); }
+});
+
+app.post("/api/comments", requireAuth, async function (req, res) {
+  try {
+    var text = (req.body.text || "").trim();
+    if (!text || text.length > 1000) return res.status(400).json({ error: "Invalid comment" });
+    var comment = await Comment.create({
+      userId: String(req.user.id),
+      userName: req.user.name,
+      userAvatar: req.user.avatar || "",
+      provider: req.user.provider,
+      filmId: req.body.filmId,
+      text: text,
+    });
+    res.json(comment);
+  } catch (e) { res.status(500).json({ error: "DB error" }); }
+});
+
+app.delete("/api/comments/:id", requireAuth, async function (req, res) {
+  try {
+    var comment = await Comment.findById(req.params.id);
+    if (!comment) return res.status(404).json({ error: "Not found" });
+    if (comment.userId !== String(req.user.id) || comment.provider !== req.user.provider) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    await Comment.deleteOne({ _id: comment._id });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: "DB error" }); }
+});
+
+/* ===== History API ===== */
+app.get("/api/history", requireAuth, async function (req, res) {
+  try {
+    var items = await History.find(userKey(req)).sort({ viewedAt: -1 }).limit(50);
+    res.json(items);
+  } catch (e) { res.status(500).json({ error: "DB error" }); }
+});
+
+app.post("/api/history", requireAuth, async function (req, res) {
+  try {
+    var key = userKey(req);
+    await History.findOneAndUpdate(
+      { userId: key.userId, provider: key.provider, filmId: req.body.filmId },
+      {
+        userId: key.userId, provider: key.provider,
+        filmId: req.body.filmId, nameRu: req.body.nameRu, nameEn: req.body.nameEn,
+        posterUrl: req.body.posterUrl, year: req.body.year, rating: req.body.rating,
+        viewedAt: new Date(),
+      },
+      { upsert: true }
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: "DB error" }); }
+});
+
+/* ===== Profile Stats API ===== */
+app.get("/api/profile/stats", requireAuth, async function (req, res) {
+  try {
+    var key = userKey(req);
+    var favCount = await Favorite.countDocuments(key);
+    var commentCount = await Comment.countDocuments({ userId: key.userId, provider: key.provider });
+    var historyCount = await History.countDocuments(key);
+    res.json({ favorites: favCount, comments: commentCount, history: historyCount });
+  } catch (e) { res.status(500).json({ error: "DB error" }); }
+});
 
 /* ===== Auth API ===== */
 app.get("/api/me", function (req, res) {

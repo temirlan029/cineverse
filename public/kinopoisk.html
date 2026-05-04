@@ -272,6 +272,7 @@
         <li><a href="news.html">Новости</a></li>
         <li><a href="weather.html">Погода</a></li>
         <li><a href="anime.html">Аниме</a></li>
+        <li><a href="profile.html">Профиль</a></li>
         <li><a href="about.html">О проекте</a></li>
       </ul>
       <button class="theme-toggle" id="theme-toggle"></button>
@@ -347,39 +348,52 @@
     <script>
       const API_BASE = "/api/kp";
 
-      /* ===== Favorites ===== */
-      function getFavs() {
-        try { return JSON.parse(localStorage.getItem("cineverse_favs") || "[]"); } catch(e) { return []; }
+      /* ===== Server-side Favorites ===== */
+      var favSet = new Set();
+      var favList = [];
+
+      async function loadFavs() {
+        try {
+          var r = await fetch("/api/favorites");
+          if (r.status === 401) { favSet = new Set(); favList = []; return; }
+          favList = await r.json();
+          favSet = new Set(favList.map(function (f) { return f.filmId; }));
+        } catch (e) { favSet = new Set(); favList = []; }
       }
-      function saveFavs(arr) { localStorage.setItem("cineverse_favs", JSON.stringify(arr)); }
-      function isFav(id) { return getFavs().some(function(f) { return f.filmId == id; }); }
-      function toggleFav(m, e) {
+
+      function isFav(id) { return favSet.has(Number(id)); }
+
+      async function toggleFav(m, e) {
         if (e) { e.stopPropagation(); e.preventDefault(); }
-        var favs = getFavs();
         var id = m.filmId || m.kinopoiskId;
-        var idx = -1;
-        favs.forEach(function(f, i) { if (f.filmId == id) idx = i; });
-        if (idx >= 0) { favs.splice(idx, 1); } else { favs.push({ filmId: id, nameRu: m.nameRu, nameEn: m.nameEn, year: m.year, posterUrl: m.posterUrl || m.posterUrlPreview, rating: m.rating || m.ratingKinopoisk, genres: m.genres, countries: m.countries, filmLength: m.filmLength, description: m.description }); }
-        saveFavs(favs);
-        renderFavs();
-        // Update heart buttons in grid
-        document.querySelectorAll('.fav-btn[data-id="' + id + '"]').forEach(function(btn) {
-          btn.classList.toggle("active", isFav(id));
-          btn.innerHTML = isFav(id) ? "❤️" : "🤍";
-        });
+        try {
+          var r = await fetch("/api/favorites", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filmId: Number(id), nameRu: m.nameRu, nameEn: m.nameEn, year: m.year, posterUrl: m.posterUrl || m.posterUrlPreview, rating: String(m.rating || m.ratingKinopoisk || "") }),
+          });
+          if (r.status === 401) { openModal(); return; }
+          var data = await r.json();
+          if (data.action === "added") { favSet.add(Number(id)); } else { favSet.delete(Number(id)); }
+          await loadFavs();
+          renderFavs();
+          document.querySelectorAll('.fav-btn[data-id="' + id + '"]').forEach(function (btn) {
+            btn.classList.toggle("active", isFav(id));
+            btn.innerHTML = isFav(id) ? "❤️" : "🤍";
+          });
+        } catch (e) {}
       }
 
       function renderFavs() {
         var c = document.getElementById("fav-container");
-        var favs = getFavs();
-        if (!favs.length) { c.innerHTML = ""; return; }
+        if (!favList.length) { c.innerHTML = ""; return; }
         var html = '<div class="fav-section"><h3>❤️ Избранное</h3><div class="results-grid">';
-        favs.forEach(function(m) {
+        favList.forEach(function (m) {
           var id = m.filmId;
           var poster = m.posterUrl ? '<img class="movie-poster" src="' + m.posterUrl + '" loading="lazy">' : '<div class="movie-poster-placeholder">🎬</div>';
           var rating = m.rating && m.rating !== "null" ? '<span class="movie-rating">★ ' + m.rating + '</span>' : "";
-          html += '<div class="movie-card" onclick=\'openMovieModal(' + JSON.stringify(m).replace(/'/g, "\\'") + ')\'>' +
-            '<button class="fav-btn active" data-id="' + id + '" onclick="toggleFav(' + JSON.stringify(m).replace(/"/g, "&quot;") + ', event)">❤️</button>' +
+          html += '<div class="movie-card">' +
+            '<button class="fav-btn active" data-id="' + id + '" onclick="toggleFav({filmId:' + id + '}, event)">❤️</button>' +
             poster +
             '<div class="movie-info"><div class="movie-title">' + (m.nameRu || m.nameEn || "—") + '</div>' +
             '<div class="movie-meta"><span>' + (m.year || "—") + '</span>' + rating + '</div></div></div>';
@@ -462,9 +476,15 @@
         container.innerHTML = html;
       }
 
+      var currentModalFilm = null;
+
+      function escHtml(s) { var d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
       function openMovieModal(m) {
+        currentModalFilm = m;
         const modal = document.getElementById("movie-modal");
         const inner = document.getElementById("movie-modal-inner");
+        var filmId = m.filmId || m.kinopoiskId;
 
         const poster = m.posterUrl
           ? '<div class="modal-poster"><img src="' + m.posterUrl + '"></div>'
@@ -492,9 +512,81 @@
             '<div class="detail-row"><span class="label">Хронометраж</span><span>' + (m.filmLength || "—") + '</span></div>' +
             '<div class="genres-list">' + genres + '</div>' +
             '<p class="desc">' + desc + '</p>' +
+            '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">' +
+              '<h3 style="font-size:1.1rem;margin-bottom:12px">💬 ОТЗЫВЫ</h3>' +
+              '<div id="comment-form-area"></div>' +
+              '<div id="comments-list" style="margin-top:12px"></div>' +
+            '</div>' +
           '</div>';
 
         modal.classList.add("active");
+
+        /* Track history */
+        fetch("/api/history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filmId: Number(filmId), nameRu: m.nameRu, nameEn: m.nameEn, posterUrl: m.posterUrl || m.posterUrlPreview, year: m.year, rating: String(r || "") }),
+        }).catch(function () {});
+
+        /* Load comments */
+        loadComments(filmId);
+        renderCommentForm(filmId);
+      }
+
+      function renderCommentForm(filmId) {
+        var area = document.getElementById("comment-form-area");
+        if (!area) return;
+        if (!currentUser) {
+          area.innerHTML = '<p style="font-size:0.8rem;color:var(--muted)"><a href="#" onclick="openModal();return false" style="color:var(--gold)">Войдите</a>, чтобы оставить отзыв</p>';
+          return;
+        }
+        area.innerHTML =
+          '<div style="display:flex;gap:8px">' +
+          '<input type="text" id="comment-input" placeholder="Напишите отзыв..." style="flex:1;padding:8px 12px;font-size:0.85rem">' +
+          '<button class="btn btn-gold" onclick="postComment(' + filmId + ')" style="padding:8px 16px;font-size:0.8rem;white-space:nowrap">Отправить</button>' +
+          '</div>';
+      }
+
+      async function postComment(filmId) {
+        var input = document.getElementById("comment-input");
+        if (!input || !input.value.trim()) return;
+        try {
+          await fetch("/api/comments", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filmId: Number(filmId), text: input.value.trim() }),
+          });
+          input.value = "";
+          loadComments(filmId);
+        } catch (e) {}
+      }
+
+      async function loadComments(filmId) {
+        var list = document.getElementById("comments-list");
+        if (!list) return;
+        try {
+          var r = await fetch("/api/comments/" + filmId);
+          var comments = await r.json();
+          if (!comments.length) { list.innerHTML = '<p style="font-size:0.8rem;color:var(--muted)">Пока нет отзывов</p>'; return; }
+          var html = "";
+          comments.forEach(function (c) {
+            var avatar = c.userAvatar ? '<img src="' + c.userAvatar + '" style="width:24px;height:24px;border-radius:50%;object-fit:cover">' : '';
+            var isOwn = currentUser && String(currentUser.id) === c.userId && currentUser.provider === c.provider;
+            var delBtn = isOwn ? '<button onclick="deleteComment(\'' + c._id + '\',' + filmId + ')" style="border:none;background:none;color:var(--red2);cursor:pointer;font-size:0.7rem;margin-left:auto">Удалить</button>' : '';
+            var date = new Date(c.createdAt).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+            html += '<div style="padding:10px 0;border-bottom:1px solid var(--border)">' +
+              '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' + avatar +
+              '<span style="font-weight:600;font-size:0.8rem">' + escHtml(c.userName) + '</span>' +
+              '<span style="font-size:0.7rem;color:var(--muted)">' + date + '</span>' + delBtn + '</div>' +
+              '<p style="font-size:0.85rem;color:var(--muted);line-height:1.4">' + escHtml(c.text) + '</p></div>';
+          });
+          list.innerHTML = html;
+        } catch (e) { list.innerHTML = ''; }
+      }
+
+      async function deleteComment(id, filmId) {
+        await fetch("/api/comments/" + id, { method: "DELETE" });
+        loadComments(filmId);
       }
 
       function closeMovieModal() {
@@ -510,7 +602,7 @@
       });
 
       /* Init */
-      renderFavs();
+      loadFavs().then(function () { renderFavs(); });
       loadTop();
     </script>
     <button class="scroll-top" id="scroll-top">&uarr;</button>

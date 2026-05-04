@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Профиль — CineVerse</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#e8b84b" />
+    <style>
+      .profile-hero { padding: 60px 0 40px; text-align: center; }
+      .profile-card {
+        max-width: 600px; margin: 0 auto;
+        background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+        padding: 40px; text-align: center;
+      }
+      .profile-avatar {
+        width: 80px; height: 80px; border-radius: 50%; object-fit: cover;
+        border: 3px solid var(--gold); margin-bottom: 16px;
+      }
+      .profile-avatar-placeholder {
+        width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 16px;
+        background: var(--bg3); display: flex; align-items: center; justify-content: center;
+        font-size: 2rem; border: 3px solid var(--gold);
+      }
+      .profile-name { font-size: 1.8rem; margin-bottom: 4px; }
+      .profile-provider { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--muted); margin-bottom: 20px; }
+      .profile-stats-row { display: flex; justify-content: center; gap: 40px; padding-top: 20px; border-top: 1px solid var(--border); }
+      .profile-stat { text-align: center; }
+      .profile-stat-num { font-family: "Bebas Neue", sans-serif; font-size: 2rem; color: var(--gold); letter-spacing: 2px; }
+      .profile-stat-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+
+      .tabs { display: flex; gap: 4px; justify-content: center; margin: 40px 0 24px; flex-wrap: wrap; }
+      .tab-btn {
+        padding: 8px 20px; border-radius: 20px; border: 1px solid var(--border);
+        background: transparent; color: var(--muted); cursor: pointer;
+        font-family: "DM Sans", sans-serif; font-size: 0.85rem; font-weight: 500; transition: all 0.25s;
+      }
+      .tab-btn:hover { border-color: var(--gold); color: var(--gold); }
+      .tab-btn.active { background: rgba(232,184,75,0.1); border-color: var(--gold); color: var(--gold); }
+
+      .tab-content { display: none; }
+      .tab-content.active { display: block; }
+
+      .items-grid {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px;
+      }
+      .item-card {
+        background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+        overflow: hidden; transition: all 0.3s; cursor: default;
+      }
+      .item-card:hover { border-color: rgba(232,184,75,0.4); transform: translateY(-4px); }
+      .item-poster { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; background: var(--bg3); }
+      .item-poster-placeholder { width: 100%; aspect-ratio: 2/3; background: var(--bg3); display: flex; align-items: center; justify-content: center; font-size: 2.5rem; color: var(--muted); }
+      .item-info { padding: 12px; }
+      .item-title { font-family: "DM Sans", sans-serif; font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+      .item-meta { display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--muted); }
+      .item-rating { color: var(--gold); font-weight: 600; }
+      .item-date { font-size: 0.7rem; color: var(--muted); margin-top: 4px; }
+      .item-remove { border: none; background: none; color: var(--red2); cursor: pointer; font-size: 0.75rem; margin-top: 6px; transition: opacity 0.2s; }
+      .item-remove:hover { opacity: 0.7; }
+
+      .comment-card {
+        background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+        padding: 16px; margin-bottom: 12px;
+      }
+      .comment-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+      .comment-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+      .comment-name { font-weight: 600; font-size: 0.85rem; }
+      .comment-film { font-size: 0.75rem; color: var(--gold); }
+      .comment-text { font-size: 0.88rem; color: var(--muted); line-height: 1.5; }
+      .comment-date { font-size: 0.7rem; color: var(--muted); margin-top: 6px; }
+      .comment-delete { border: none; background: none; color: var(--red2); cursor: pointer; font-size: 0.7rem; float: right; }
+      .comment-delete:hover { opacity: 0.7; }
+
+      .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+      .empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
+      .empty-state p { font-size: 0.9rem; }
+
+      .not-logged { text-align: center; padding: 100px 20px; }
+      .not-logged h2 { font-size: 2rem; margin-bottom: 12px; }
+      .not-logged p { color: var(--muted); margin-bottom: 24px; }
+
+      @media (max-width: 600px) {
+        .profile-stats-row { gap: 20px; }
+        .items-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <a href="index.html" class="nav-logo">CINE<span>VERSE</span></a>
+      <ul class="nav-links">
+        <li><a href="index.html">Главная</a></li>
+        <li><a href="kinopoisk.html">Кинопоиск</a></li>
+        <li><a href="minigames.html">Игры</a></li>
+        <li><a href="music.html">Музыка</a></li>
+        <li><a href="news.html">Новости</a></li>
+        <li><a href="weather.html">Погода</a></li>
+        <li><a href="anime.html">Аниме</a></li>
+        <li><a href="profile.html" class="active">Профиль</a></li>
+        <li><a href="about.html">О проекте</a></li>
+      </ul>
+      <button class="theme-toggle" id="theme-toggle"></button>
+      <button class="burger" id="burger" onclick="document.getElementById('burger').classList.toggle('active');document.querySelector('.nav-links').classList.toggle('open')"><span></span><span></span><span></span></button>
+      <div class="nav-auth" id="nav-auth"></div>
+    </nav>
+
+    <div id="auth-modal" class="modal-overlay">
+      <div class="modal">
+        <button class="modal-close" onclick="closeModal()">x</button>
+        <h2 id="modal-title"></h2>
+        <p id="modal-sub"></p>
+        <div id="modal-body"></div>
+        <div class="modal-footer" id="modal-footer"></div>
+      </div>
+    </div>
+
+    <main>
+      <div id="profile-content"></div>
+    </main>
+
+    <footer>
+      <div>&copy; 2025 CineVerse</div>
+      <div style="display:flex;gap:20px">
+        <a href="kinopoisk.html">Кинопоиск</a>
+        <a href="minigames.html">Игры</a>
+      </div>
+    </footer>
+
+    <script src="auth.js"></script>
+    <script>
+      var profileUser = null;
+      var profileStats = { favorites: 0, comments: 0, history: 0 };
+
+      function escHtml(s) {
+        var d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+      }
+
+      function formatDate(d) {
+        var dt = new Date(d);
+        return dt.toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" });
+      }
+
+      async function initProfile() {
+        try {
+          var r = await fetch("/api/me");
+          profileUser = await r.json();
+        } catch (e) { profileUser = null; }
+
+        var content = document.getElementById("profile-content");
+        if (!profileUser) {
+          content.innerHTML =
+            '<div class="not-logged section"><div class="container">' +
+            '<h2>ВОЙДИТЕ В <span class="gold">АККАУНТ</span></h2>' +
+            '<p>Чтобы увидеть профиль, войдите через Google или VK</p>' +
+            '<button class="btn btn-gold" onclick="openModal()">Войти</button>' +
+            '</div></div>';
+          return;
+        }
+
+        try {
+          var sr = await fetch("/api/profile/stats");
+          profileStats = await sr.json();
+        } catch (e) {}
+
+        var providerLabel = profileUser.provider === "google" ? "Google" : "VK";
+        var avatarHtml = profileUser.avatar
+          ? '<img class="profile-avatar" src="' + profileUser.avatar + '">'
+          : '<div class="profile-avatar-placeholder">👤</div>';
+
+        content.innerHTML =
+          '<section class="profile-hero section"><div class="container">' +
+          '<div class="profile-card fade-up">' +
+          avatarHtml +
+          '<div class="profile-name">' + escHtml(profileUser.name) + '</div>' +
+          '<div class="profile-provider"><span class="tag tag-gold">' + providerLabel + '</span>' +
+          (profileUser.email ? '<span>' + escHtml(profileUser.email) + '</span>' : '') + '</div>' +
+          '<div class="profile-stats-row">' +
+          '<div class="profile-stat"><div class="profile-stat-num" id="stat-fav">' + profileStats.favorites + '</div><div class="profile-stat-label">Избранное</div></div>' +
+          '<div class="profile-stat"><div class="profile-stat-num" id="stat-com">' + profileStats.comments + '</div><div class="profile-stat-label">Отзывы</div></div>' +
+          '<div class="profile-stat"><div class="profile-stat-num" id="stat-hist">' + profileStats.history + '</div><div class="profile-stat-label">Просмотрено</div></div>' +
+          '</div></div>' +
+          '<div class="tabs">' +
+          '<button class="tab-btn active" onclick="switchTab(\'favorites\')">Избранное</button>' +
+          '<button class="tab-btn" onclick="switchTab(\'comments\')">Мои отзывы</button>' +
+          '<button class="tab-btn" onclick="switchTab(\'history\')">История</button>' +
+          '</div>' +
+          '<div id="tab-favorites" class="tab-content active"></div>' +
+          '<div id="tab-comments" class="tab-content"></div>' +
+          '<div id="tab-history" class="tab-content"></div>' +
+          '</div></section>';
+
+        loadFavorites();
+        loadComments();
+        loadHistory();
+      }
+
+      function switchTab(name) {
+        document.querySelectorAll(".tab-btn").forEach(function (b) { b.classList.remove("active"); });
+        document.querySelectorAll(".tab-content").forEach(function (c) { c.classList.remove("active"); });
+        event.target.classList.add("active");
+        document.getElementById("tab-" + name).classList.add("active");
+      }
+
+      async function loadFavorites() {
+        var c = document.getElementById("tab-favorites");
+        try {
+          var r = await fetch("/api/favorites");
+          var favs = await r.json();
+          if (!favs.length) {
+            c.innerHTML = '<div class="empty-state"><div class="icon">❤️</div><p>Нет избранных фильмов</p><p style="font-size:0.8rem;margin-top:8px"><a href="kinopoisk.html" style="color:var(--gold)">Найти фильмы</a></p></div>';
+            return;
+          }
+          var html = '<div class="items-grid">';
+          favs.forEach(function (f) {
+            var poster = f.posterUrl ? '<img class="item-poster" src="' + f.posterUrl + '" loading="lazy">' : '<div class="item-poster-placeholder">🎬</div>';
+            var rating = f.rating && f.rating !== "null" ? '<span class="item-rating">★ ' + f.rating + '</span>' : '';
+            html += '<div class="item-card">' + poster +
+              '<div class="item-info"><div class="item-title">' + escHtml(f.nameRu || f.nameEn || "—") + '</div>' +
+              '<div class="item-meta"><span>' + (f.year || "—") + '</span>' + rating + '</div>' +
+              '<div class="item-date">' + formatDate(f.addedAt) + '</div>' +
+              '<button class="item-remove" onclick="removeFav(' + f.filmId + ')">Удалить</button>' +
+              '</div></div>';
+          });
+          html += '</div>';
+          c.innerHTML = html;
+        } catch (e) { c.innerHTML = '<div class="empty-state"><p>Ошибка загрузки</p></div>'; }
+      }
+
+      async function removeFav(filmId) {
+        await fetch("/api/favorites", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filmId: filmId }),
+        });
+        loadFavorites();
+        var s = document.getElementById("stat-fav");
+        if (s) s.textContent = Math.max(0, parseInt(s.textContent) - 1);
+      }
+
+      async function loadComments() {
+        var c = document.getElementById("tab-comments");
+        try {
+          var r = await fetch("/api/history");
+          var hist = await r.json();
+          var allComments = [];
+          /* Fetch comments for films the user has interacted with - show all user's comments */
+          /* Simpler: just fetch all from server by checking recent history film IDs */
+          /* Actually, we need a user-comments endpoint. Let's just show them from profile stats perspective */
+          /* For simplicity, load comments from all films user has in favorites + history */
+          var filmIds = new Set();
+          var favR = await fetch("/api/favorites");
+          var favs = await favR.json();
+          favs.forEach(function (f) { filmIds.add(f.filmId); });
+          hist.forEach(function (h) { filmIds.add(h.filmId); });
+
+          for (var fid of filmIds) {
+            var cr = await fetch("/api/comments/" + fid);
+            var comments = await cr.json();
+            comments.forEach(function (cm) {
+              if (cm.userId === String(profileUser.id) && cm.provider === profileUser.provider) {
+                allComments.push(cm);
+              }
+            });
+          }
+
+          if (!allComments.length) {
+            c.innerHTML = '<div class="empty-state"><div class="icon">💬</div><p>Нет отзывов</p><p style="font-size:0.8rem;margin-top:8px"><a href="kinopoisk.html" style="color:var(--gold)">Найти фильмы и оставить отзыв</a></p></div>';
+            return;
+          }
+
+          var html = '';
+          allComments.sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
+          allComments.forEach(function (cm) {
+            var avatar = cm.userAvatar ? '<img class="comment-avatar" src="' + cm.userAvatar + '">' : '';
+            html += '<div class="comment-card">' +
+              '<div class="comment-header">' + avatar + '<span class="comment-name">' + escHtml(cm.userName) + '</span>' +
+              '<button class="comment-delete" onclick="deleteComment(\'' + cm._id + '\')">Удалить</button></div>' +
+              '<div class="comment-text">' + escHtml(cm.text) + '</div>' +
+              '<div class="comment-date">' + formatDate(cm.createdAt) + '</div></div>';
+          });
+          c.innerHTML = html;
+        } catch (e) { c.innerHTML = '<div class="empty-state"><p>Ошибка загрузки</p></div>'; }
+      }
+
+      async function deleteComment(id) {
+        await fetch("/api/comments/" + id, { method: "DELETE" });
+        loadComments();
+        var s = document.getElementById("stat-com");
+        if (s) s.textContent = Math.max(0, parseInt(s.textContent) - 1);
+      }
+
+      async function loadHistory() {
+        var c = document.getElementById("tab-history");
+        try {
+          var r = await fetch("/api/history");
+          var items = await r.json();
+          if (!items.length) {
+            c.innerHTML = '<div class="empty-state"><div class="icon">🕐</div><p>История просмотров пуста</p><p style="font-size:0.8rem;margin-top:8px"><a href="kinopoisk.html" style="color:var(--gold)">Найти фильмы</a></p></div>';
+            return;
+          }
+          var html = '<div class="items-grid">';
+          items.forEach(function (h) {
+            var poster = h.posterUrl ? '<img class="item-poster" src="' + h.posterUrl + '" loading="lazy">' : '<div class="item-poster-placeholder">🎬</div>';
+            var rating = h.rating && h.rating !== "null" ? '<span class="item-rating">★ ' + h.rating + '</span>' : '';
+            html += '<div class="item-card">' + poster +
+              '<div class="item-info"><div class="item-title">' + escHtml(h.nameRu || h.nameEn || "—") + '</div>' +
+              '<div class="item-meta"><span>' + (h.year || "—") + '</span>' + rating + '</div>' +
+              '<div class="item-date">' + formatDate(h.viewedAt) + '</div></div></div>';
+          });
+          html += '</div>';
+          c.innerHTML = html;
+        } catch (e) { c.innerHTML = '<div class="empty-state"><p>Ошибка загрузки</p></div>'; }
+      }
+
+      document.addEventListener("DOMContentLoaded", function () {
+        initProfile();
+      });
+    </script>
+    <button class="scroll-top" id="scroll-top">&uarr;</button>
+    <script src="global.js"></script>
+  </body>
+</html>
