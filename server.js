@@ -1,8 +1,9 @@
 require("dotenv").config();
+const crypto = require("crypto");
+if (!globalThis.crypto) { globalThis.crypto = crypto.webcrypto; }
 const express = require("express");
 const cookieSession = require("cookie-session");
 const passport = require("passport");
-const crypto = require("crypto");
 const path = require("path");
 const mongoose = require("mongoose");
 
